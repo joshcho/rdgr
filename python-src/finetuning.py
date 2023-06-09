@@ -4,7 +4,7 @@ import torch
 import pandas as pd
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
-from transformers import AutoTokenizer, DebertaForSequenceClassification, AdamW
+from transformers import AutoTokenizer, DebertaV2ForSequenceClassification, AdamW
 from peft import get_peft_config, get_peft_model, LoraConfig, TaskType
 
 def load_math_data(data_dir):
@@ -19,12 +19,12 @@ def load_math_data(data_dir):
     df = pd.DataFrame(math_data)
     return df
 
-data_dir = "/home/pollock/rdgr/data/MATH/train"
+data_dir = "/root/rdgr/data/MATH/train"
 df = load_math_data(data_dir)
 
 class DifficultyDataset(Dataset):
     def __init__(self, df, tokenizer, max_length):
-        self.df = df
+        self.df = df[df['level'] != 'Level ?']
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -33,8 +33,9 @@ class DifficultyDataset(Dataset):
 
     def __getitem__(self, idx):
         problem = self.df.iloc[idx]['problem']
-        label = int(self.df.iloc[idx]['level'][-1])  # assuming 'level' is the label
-        assert 1 <= label <= 5
+        # print(self.df.iloc[idx]['level'])
+        label = int(self.df.iloc[idx]['level'][-1]) - 1  # assuming 'level' is the label
+        assert 0 <= label <= 4
         encoding = self.tokenizer.encode_plus(
             problem,
             truncation=True,
@@ -50,7 +51,7 @@ class DifficultyDataset(Dataset):
             'labels': torch.tensor(label, dtype=torch.long)
         }
 
-tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-base")
+tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-v2-xlarge")
 
 dataset = DifficultyDataset(df, tokenizer, max_length=256)
 dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
@@ -59,7 +60,7 @@ peft_config = LoraConfig(
     task_type=TaskType.SEQ_CLS, inference_mode=False, r=8, lora_alpha=32, lora_dropout=0.1
 )
 
-model = DebertaForSequenceClassification.from_pretrained("microsoft/deberta-base", num_labels=5)
+model = DebertaV2ForSequenceClassification.from_pretrained("microsoft/deberta-v2-xlarge", num_labels=5)
 model = get_peft_model(model, peft_config)
 optimizer = AdamW(model.parameters(), lr=1e-5)
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
