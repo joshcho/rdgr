@@ -144,6 +144,7 @@ def evaluate_and_save(model, dataloader, device, df):
 
     return accuracy
 
+
 # Call the function to evaluate the model and save results
 accuracy = evaluate_and_save(model, dataloader_test, device, df_test)
 print(f"Test Accuracy: {accuracy}")
