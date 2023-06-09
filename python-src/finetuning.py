@@ -111,9 +111,6 @@ df_test = load_math_data(data_dir_test)
 dataset_test = DifficultyDataset(df_test, tokenizer, max_length=256)
 dataloader_test = DataLoader(dataset_test, batch_size=8, shuffle=False)
 
-# Call the function to train the model
-train_model(model, dataloader, 5, optimizer, device)
-
 def evaluate_and_save(model, dataloader, device, df):
     model.eval()
     total = 0
@@ -145,6 +142,9 @@ def evaluate_and_save(model, dataloader, device, df):
     df.to_csv('./results.csv', index=False)
 
     return accuracy
+
+# Call the function to train the model
+train_model(model, dataloader, 5, optimizer, device)
 
 # Call the function to evaluate the model and save results
 accuracy = evaluate_and_save(model, dataloader_test, device, df_test)
