@@ -2,7 +2,7 @@ import os
 import json
 import torch
 import pandas as pd
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, DebertaV2ForSequenceClassification, AdamW
 from peft import get_peft_config, get_peft_model, LoraConfig, TaskType
@@ -66,10 +66,12 @@ optimizer = AdamW(model.parameters(), lr=1e-5)
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 model.to(device)
 
-for epoch in range(10):
-    print(f"Epoch {epoch + 1}")
-    progress_bar = tqdm(dataloader, desc="Training", position=0, leave=True)
-    for batch in progress_bar:
+def train_epoch(model, dataloader, optimizer, device):
+    model.train()
+    total_loss = 0
+    progress_bar = trange(len(dataloader), desc='Training')
+
+    for i, batch in enumerate(dataloader):
         optimizer.zero_grad()
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
@@ -77,13 +79,71 @@ for epoch in range(10):
 
         outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
         loss = outputs[0]
+        total_loss += loss.item()
+
         loss.backward()
         optimizer.step()
         progress_bar.set_description(f"Training loss: {loss.item()}")
+        progress_bar.update()
 
-    checkpoint_dir = f"./saved/checkpoint_epoch_{epoch + 1}"
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    model.save_pretrained(checkpoint_dir)
-    tokenizer.save_pretrained(checkpoint_dir)
+    avg_train_loss = total_loss / len(dataloader)
+    return avg_train_loss
 
-model.save_pretrained("./saved-model")
+def train_model(model, dataloader, epochs, optimizer, device):
+    for epoch in range(epochs):
+        print(f"\nEpoch {epoch + 1}")
+        avg_train_loss = train_epoch(model, dataloader, optimizer, device)
+        print(f"\nAverage training loss: {avg_train_loss:.2f}")
+
+        checkpoint_dir = f"./saved/checkpoint_epoch_{epoch + 1}"
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        model.save_pretrained(checkpoint_dir)
+        tokenizer.save_pretrained(checkpoint_dir)
+    model.save_pretrained("./saved-model")
+
+# Load test data
+data_dir_test = "/root/rdgr/data/MATH/test"
+df_test = load_math_data(data_dir_test)
+
+# Create test DataLoader
+dataset_test = DifficultyDataset(df_test, tokenizer, max_length=256)
+dataloader_test = DataLoader(dataset_test, batch_size=8, shuffle=False)
+
+# Call the function to train the model
+# train_model(model, dataloader, 10, optimizer, device)
+
+def evaluate_and_save(model, dataloader, device, df):
+    model.eval()
+    total = 0
+    correct = 0
+    predictions = []
+    with torch.no_grad():
+        for batch in dataloader:
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['labels'].to(device)
+
+            outputs = model(input_ids, attention_mask=attention_mask)
+            _, preds = torch.max(outputs.logits, dim=1)
+            total += labels.size(0)
+            correct += (preds == labels).cpu().numpy().sum()
+
+            # Converting predictions from tensor to list
+            preds = preds.cpu().tolist()
+
+            # Converting label indices to 'Level n' format and appending to the list
+            predictions.extend(['Level ' + str(i+1) for i in preds])
+
+    accuracy = correct / total
+
+    # Append predictions to the DataFrame
+    df['prediction'] = predictions
+
+    # Save DataFrame to a CSV file
+    df.to_csv('/path/to/save/results.csv', index=False)
+
+    return accuracy
+
+# Call the function to evaluate the model and save results
+accuracy = evaluate_and_save(model, dataloader_test, device, df_test)
+print(f"Test Accuracy: {accuracy}")
