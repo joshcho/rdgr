@@ -24,7 +24,8 @@
                  [com.rpl/specter "1.1.4"]
                  [philoskim/debux "0.8.3"]
                  [expound "0.9.0"]
-                 [adzerk/env "0.4.0"]]
+                 [adzerk/env "0.4.0"]
+                 [metosin/jsonista "0.3.7"]]
   :main ^:skip-aot rdgr.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all

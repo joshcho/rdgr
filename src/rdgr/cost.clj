@@ -31,11 +31,13 @@
                     :cost/spec)
           pricing)
 
-(defn get-cost [model text cost-type]
-  {:pre [(s/valid? :model/spec model)
-         (string? text)
-         (s/valid? :cost/type cost-type)]}
-  (let [price-1k (get-in pricing ["gpt-4" cost-type])]
-    (*
-     (/ price-1k 1000.0)
-     (get-num-tokens model text))))
+(defn get-cost [problem]
+  {:pre [(s/valid? :problem/completed-spec problem)]}
+  (let [{:problem/keys [model question raw-completion]} problem]
+    (+
+     (*
+      (/ (get-in pricing [model :cost/prompt]) 1000.0)
+      (get-num-tokens model question))
+     (*
+      (/ (get-in pricing [model :cost/completion]) 1000.0)
+      (get-num-tokens model raw-completion)))))
