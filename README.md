@@ -4,6 +4,7 @@ FIXME: description
 
 ## Installation
 
+git clone https://huggingface.co/datasets/lighteval/MATH
 Dataset is at: https://huggingface.co/datasets/codeparrot/apps
 Download from http://example.com/FIXME.
 
