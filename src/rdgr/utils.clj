@@ -109,12 +109,13 @@ def solver():
              model)
         (find-boxed completion)
         (= model "gpt-4-PS")
-        (execute-python-code
-         (format "import math
+        (:out
+         (execute-python-code
+          (format "import math
 import numpy as np
 import sympy as sp
 def solver():\n%s\nprint(solver(), end=\"\")" completion)
-         nil)
+          nil))
         :else
         (assert false)))
 
@@ -144,6 +145,13 @@ def solver():\n%s\nprint(solver(), end=\"\")" completion)
                  (get problem-map
                       (get-model-key model))))
        (map first)))
+(defn check-diff-missing [start-idx end-idx]
+  ;; {:pre [(s/valid? :model/spec model)]}
+  (->> (range start-idx end-idx)
+       (map #(vector % (get @rdgr.core/dataset-conn %)))
+       (remove (fn [[idx problem-map]]
+                 (get problem-map :pred-difficulty)))
+       (map first)))
 
 (defn get-incorrect-ids [model start-idx end-idx]
   {:pre [(s/valid? :model/spec model)]}
@@ -156,9 +164,10 @@ def solver():\n%s\nprint(solver(), end=\"\")" completion)
                    (when (and model-answer answer)
                      (answer-equiv? model-answer answer)))))
        (map first)))
-(def incorrect-ids-gpt-4 (get-incorrect-ids "gpt-4" 0 200))
-(def incorrect-ids-gpt-4-CoT (get-incorrect-ids "gpt-4-CoT" 0 200))
-(def incorrect-ids-gpt-3-5-turbo (get-incorrect-ids "gpt-3.5-turbo" 0 200))
+(count )
+(def incorrect-ids-gpt-4 (get-incorrect-ids "gpt-4" 0 500))
+(def incorrect-ids-gpt-4-CoT (get-incorrect-ids "gpt-4-CoT" 0 500))
+(def incorrect-ids-gpt-3-5-turbo (get-incorrect-ids "gpt-3.5-turbo" 0 500))
 (def intersect-incorrect-ids
   (clojure.set/intersection
    (set incorrect-ids-gpt-3-5-turbo)
@@ -168,6 +177,13 @@ def solver():\n%s\nprint(solver(), end=\"\")" completion)
 (defn average [xs]
   (/ (apply + xs)
      (count xs)))
+
+(def difficulty-system-prompt "Determine the difficulty of the high school problem. The difficulty is either AMC10, AMC12, or AIME.
+
+Respond in the following format:
+Justification: {justification}
+Difficulty: {difficulty}")
+
 ;; (->> intersect-incorrect-ids
 ;;      (map
 ;;       #(get @rdgr.core/dataset-conn %))

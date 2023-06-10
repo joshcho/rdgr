@@ -1,34 +1,8 @@
 # rdgr
 
-FIXME: description
-
 ## Installation
 
 git clone https://huggingface.co/datasets/lighteval/MATH
-Dataset is at: https://huggingface.co/datasets/codeparrot/apps
-Download from http://example.com/FIXME.
-
-## Usage
-
-FIXME: explanation
-
-    $ java -jar rdgr-0.1.0-standalone.jar [args]
-
-## Options
-
-FIXME: listing of options this app accepts.
-
-## Examples
-
-...
-
-### Bugs
-
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
 
 ## License
 

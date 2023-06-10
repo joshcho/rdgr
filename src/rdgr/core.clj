@@ -27,7 +27,72 @@
                   (u/find-boxed (:solution problem-map))))
          ;; (data-csv/read-csv "../data/MATH-dispatch/dispatch-test-1000.csv")
          (data-csv/read-csv "dispatch-test-1000")))
-(def dataset-saved-conn dataset-conn)
+(def dataset-saved-db (mapv
+                       (fn [problem-map]
+                         (assoc problem-map
+                                :answer
+                                (u/find-boxed (:solution problem-map))))
+                       ;; (data-csv/read-csv "../data/MATH-dispatch/dispatch-test-1000.csv")
+                       (data-csv/read-csv "dispatch-test-1000")))
+
+;; (->>
+;;  (range 0 500)
+;;  (map (fn [idx]
+;;         (get @dataset-conn idx)))
+;;  (map (fn [problem-map]
+;;         (:gpt-3.5-turbo-cost problem-map)))
+;;  (apply +))
+
+;; (def dataset-saved-saved-db @dataset-conn)
+;; (swap! dataset-conn
+;;        (fn [dataset-db]
+;;          (assoc dataset-db 0
+;;                 (get dataset-saved-db 0))))
+;; (do
+;;   (doall
+;;    (->> (range 0 500)
+;;         (map vector @dataset-conn)
+;;         (map
+;;          (fn [[problem-map idx]]
+;;            (swap! dataset-conn
+;;                   (fn [dataset-db]
+;;                     (update
+;;                      dataset-db idx
+;;                      (fn [problem-map]
+;;                        (into problem-map
+;;                              {:gpt-4-PS-answer
+;;                               (u/get-answer "gpt-4-PS"
+;;                                             (:gpt-4-PS problem-map))})))))))))
+;;   true)
+;; (do
+;;   (doall
+;;    (->> (range 0 10)
+;;         (map vector @dataset-conn)
+;;         (map
+;;          (fn [[problem-map idx]]
+;;            (swap! dataset-conn
+;;                   (fn [dataset-db]
+;;                     (update
+;;                      dataset-db idx
+;;                      (fn [problem-map]
+;;                        (into problem-map
+;;                              {:gpt-4-cost
+;;                               (cost/get-cost
+;;                                "gpt-4" (:problem problem-map)
+;;                                (:gpt-4 problem-map))
+;;                               :gpt-3.5-turbo-cost
+;;                               (cost/get-cost
+;;                                "gpt-3.5-turbo" (:problem problem-map)
+;;                                (:gpt-3.5-turbo problem-map))
+;;                               :gpt-4-CoT-cost
+;;                               (cost/get-cost
+;;                                "gpt-4-CoT" (:problem problem-map)
+;;                                (:gpt-4-CoT problem-map))
+;;                               :gpt-4-PS-cost
+;;                               (cost/get-cost
+;;                                "gpt-4-PS" (:problem problem-map)
+;;                                (:gpt-4-PS problem-map))})))))))))
+;;   true)
 
 ;; (data-csv/overwrite-csv "dispatch-test-1000" @dataset-conn)
 
@@ -44,6 +109,41 @@
     (when (nil? res)
       (u/safe-print (format "nil returned for %s" prompt)))
     res))
+
+(defn extract-difficulty [text]
+  (let [pattern #"Difficulty: (\w+)"
+        matches (re-seq pattern text)]
+    (if (not (empty? matches))
+      (second (first matches))
+      nil)))
+
+(defn get-problem-difficulty
+  ([model start-idx end-idx]
+   (parallel-do-problem "gpt-4" start-idx end-idx get-problem-difficulty))
+  ([model idx]
+   (let [{:keys [problem pred-difficulty]} (get @dataset-conn idx)]
+     (when-not pred-difficulty
+       (u/safe-print "request start")
+       (let [res (get-in
+                  (api/create-chat-completion
+                   {:model "gpt-4"
+                    :messages [{:role "system"
+                                :content u/difficulty-system-prompt}
+                               {:role "user"
+                                :content problem}]
+                    :max_tokens 1000})
+                  [:choices 0 :message :content])]
+         (u/safe-print (format "request done with %s" res))
+         (if (nil? res)
+           (u/safe-print (format "nil returned for %s" problem))
+           (swap! dataset-conn
+                  (fn [dataset-db]
+                    (update
+                     dataset-db idx
+                     (fn [problem-map]
+                       (into problem-map
+                             {:pred-difficulty (extract-difficulty res)}))))))
+         true)))))
 
 (defn parallel-do-problem [model start-idx end-idx func]
   {:pre [(s/valid? :model/spec model)
@@ -123,6 +223,7 @@
                      }))))
                (u/safe-print (format "finished %s completion for %d" model idx)))))
          true)))))
+
 
 ;; (defn complete-dataset [model]
 ;;   {:pre [(s/valid? :model/spec model)]}
@@ -301,7 +402,7 @@
 ;; ;;                               "hello there! i am curious"))
 ;; ;;                :cost/completion)
 
-(defn -main
-  "I don't do a whole lot ... yet."
-  [& args]
-  (println "Hello, World!"))
+;; (defn -main
+;;   "I don't do a whole lot ... yet."
+;;   [& args]
+;;   (println "Hello, World!"))

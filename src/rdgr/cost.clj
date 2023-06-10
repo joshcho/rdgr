@@ -35,7 +35,8 @@
   {:pre [(s/valid? :model/spec model)
          (string? prompt)
          (string? completion)]}
-  (let [model (if (= model "gpt-4-CoT")
+  (let [model (if (or (= model "gpt-4-CoT")
+                      (= model "gpt-4-PS"))
                 "gpt-4"
                 model)]
     (+
