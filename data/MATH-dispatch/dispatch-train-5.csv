@@ -1,0 +1,50 @@
+problem,level,type,solution
+"Simplify $\dfrac{5+12i}{2-3i}$. Your answer should be of the form $a+bi$, where $a$ and $b$ are both real numbers and written as improper fractions (if necessary).",4.0,Algebra,"Multiplying the numerator and denominator by the conjugate of the denominator, we have \begin{align*}
+\dfrac{5+12i}{2-3i} \cdot \frac{2+3i}{2+3i} &= \frac{5(2) + 5(3i) + 12i(2) +12i(3i)}{2(2) + 2(3i) + -3i(2) -3i(3i)}\\
+& = \frac{-26+39i}{13} \\
+&= \boxed{-2+3i}.
+\end{align*}"
+The sum of four numbers is one-half. What is the mean of the four numbers? Express your answer as a common fraction.,1.0,Prealgebra,"Since the mean of four numbers is just their sum divided by four, the mean is $\dfrac{1/2}{4} = \boxed{\frac{1}{8}}$."
+"Find the matrix $\mathbf{M},$ with real entries, such that
+\[\mathbf{M}^3 - 4 \mathbf{M}^2 + 5 \mathbf{M} = \begin{pmatrix} 10 & 20 \\ 5 & 10 \end{pmatrix}.\]",4.0,Precalculus,"Let $\mathbf{M} = \begin{pmatrix} a & b \\ c & d \end{pmatrix}.$  Note that
+\[\mathbf{M} (\mathbf{M}^3 - 4 \mathbf{M}^2 + 5 \mathbf{M}) = \mathbf{M}^4 - 4 \mathbf{M}^3 + 5 \mathbf{M}^2 = (\mathbf{M}^3 - 4 \mathbf{M}^2 + 5 \mathbf{M}) \mathbf{M},\]so
+\[\begin{pmatrix} a & b \\ c & d \end{pmatrix} \begin{pmatrix} 10 & 20 \\ 5 & 10 \end{pmatrix} = \begin{pmatrix} 10 & 20 \\ 5 & 10 \end{pmatrix} \begin{pmatrix} a & b \\ c & d \end{pmatrix}.\]This becomes
+\[\begin{pmatrix} 10a + 5b & 20a + 10b \\ 10c + 5d & 20c + 10d \end{pmatrix} = \begin{pmatrix} 10a + 20c & 10b + 20d \\ 5a + 10c & 5b + 10d \end{pmatrix}.\]Comparing entries, we get
+\begin{align*}
+10a + 5b &= 10a + 20c, \\
+20a + 10b &= 10b + 20d, \\
+10c + 5d &= 5a + 10c, \\
+20c + 10d &= 5b + 10d.
+\end{align*}Then from the first and second equations, $5b = 20c$ and $20a = 20d,$ so $b = 4c$ and $a = d.$  (The other equations give us the same information.)  Thus,
+\[\mathbf{M} = \begin{pmatrix} a & 4c \\ c & a \end{pmatrix}.\]Then
+\[\mathbf{M}^2 = \begin{pmatrix} a & 4c \\ c & a \end{pmatrix} \begin{pmatrix} a & 4c \\ c & a \end{pmatrix} = \begin{pmatrix} a^2 + 4c^2 & 8ac \\ 2ac & a^2 + 4c^2 \end{pmatrix},\]and
+\[\mathbf{M}^3 = \begin{pmatrix} a & 4c \\ c & a \end{pmatrix} \begin{pmatrix} a^2 + 4c^2 & 8ac \\ 2ac & a^2 + 4c^2 \end{pmatrix} = \begin{pmatrix} a^3 + 12ac^2 & 12a^2 c + 16c^3 \\ 3a^2 c + 4c^3 & a^3 + 12ac^2 \end{pmatrix}.\]Hence,
+\begin{align*}
+\mathbf{M}^3 - 4 \mathbf{M}^2 + 5 \mathbf{M} &= \begin{pmatrix} a^3 + 12ac^2 & 12a^2 c + 16c^3 \\ 3a^2 c + 4c^3 & a^3 + 12ac^2 \end{pmatrix} - 4 \begin{pmatrix} a^2 + 4c^2 & 8ac \\ 2ac & a^2 + 4c^2 \end{pmatrix} + 5 \begin{pmatrix} a & 4c \\ c & a \end{pmatrix} \\
+&= \begin{pmatrix} a^3 + 12ac^2 - 4a^2 - 16c^2 + 5a & 12a^2 c + 16c^3 - 32ac + 20c \\ 3a^2 c + 4c^3 - 8ac + 5c & a^3 + 12ac^2 - 4a^2 - 16c^2 + 5a \end{pmatrix}
+\end{align*}Again comparing entries, we get
+\begin{align*}
+a^3 + 12ac^2 - 4a^2 - 16c^2 + 5a &= 10, \\
+3a^2 c + 4c^3 - 8ac + 5c &= 5.
+\end{align*}Then
+\[(a^3 + 12ac^2 - 4a^2 - 16c^2 + 5a) - 2 (3a^2 c + 4c^3 - 8ac + 5c) = 0.\]Expanding, we get
+\[a^3 - 6a^2 c + 12ac^2 - 8c^3 - 4a^2 + 16ac - 16c^2 + 5a - 10c = 0,\]which we can write as
+\[(a - 2c)^3 - 4(a - 2c)^2 + 5(a - 2c) = 0.\]Let $x = a - 2c,$ so
+\[x^3 - 4x^2 + 5x = 0,\]which factors as $x(x^2 - 4x + 5) = 0.$  The quadratic factor has no real roots, so $x = 0,$ which means $a = 2c.$
+
+Substituting into the equation $3a^2 c + 4c^3 - 8ac + 5c = 5,$ we get
+\[3(2c)^2 c + 4c^3 - 8(2c) c + 5c = 5,\]which simplifies to $16c^3 - 16c^2 + 5c - 5 = 0.$  This factors as $(c - 1)(16c^2 + 5) = 0,$ so $c = 1.$  It follows that $a = 2,$ $b = 4,$ and $d = 2,$ so
+\[\mathbf{M} = \boxed{\begin{pmatrix} 2 & 4 \\ 1 & 2 \end{pmatrix}}.\]"
+"For any positive integer $n$, the value of $n!$ is the product of the first $n$ positive integers.  For example, $4! = 4\cdot 3\cdot 2\cdot 1 =24$.  What is the greatest common divisor of $5!$ and $7!$ ?",2.0,Prealgebra,"Rather than finding the prime factorization of $5!$ and $7!$, we note that  \[7! = 7\cdot 6\cdot 5 \cdot 4\cdot 3\cdot 2 \cdot 1 = 7\cdot 6\cdot 5!.\]Therefore, $7!$ is a multiple of $5!$, which means that $5!$ is the greatest common divisor of $5!$ and $7!$ (since it is a divisor of $7!$ and is the largest divisor of $5!$). So, we have  \[5! = 5\cdot 4\cdot 3\cdot 2\cdot 1 = \boxed{120}.\]"
+"Let $m$ be the product of all positive integers less than $4!$ which are invertible modulo $4!$. Find the remainder when $m$ is divided by $4!$.
+
+(Here $n!$ denotes $1\times\cdots\times n$ for each positive integer $n$.)",4.0,Number Theory,"We compute that $4!=1\times 2\times 3\times 4 = 2^{3}\times 3=24$. So we want exactly the numbers in the set $\{1,\ldots,24\}$ which are divisible by neither $2$ nor $3$, since an integer $a$ is invertible modulo $n$ for some positive integer $n$ if and only if $\gcd(a,n)=1$. These turn out to be $\{1,5,7,11,13,17,19,23\}$. Then \begin{align*}
+m & \equiv 1\cdot 5\cdot 7\cdot 11\cdot 13\cdot 17\cdot 19\cdot 23\\
+& \equiv 1\cdot 5\cdot 7\cdot 11\cdot (-11)\cdot (-7)\cdot (-5)\cdot (-1)\\
+& \equiv (5\cdot 7\cdot 11)^2\\
+& \equiv (35\cdot 11)^2\\
+& \equiv (11\cdot 11)^2\\
+& \equiv (121)^2\\
+& \equiv 1^2\\
+& \equiv \boxed{1}\pmod {24}
+\end{align*}"

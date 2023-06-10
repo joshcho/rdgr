@@ -2,150 +2,207 @@ import os
 import json
 import torch
 import pandas as pd
+import numpy as np
+import sys
+import argparse
 from tqdm import tqdm, trange
-from torch.utils.data import Dataset, DataLoader
-from transformers import AutoTokenizer, DebertaV2ForSequenceClassification, AdamW
-from peft import get_peft_config, get_peft_model, LoraConfig, TaskType
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
+    DataCollatorWithPadding,
+    TrainingArguments,
+    Trainer,
+)
+from peft import (
+    get_peft_config,
+    get_peft_model,
+    get_peft_model_state_dict,
+    set_peft_model_state_dict,
+    PeftType,
+    PeftModel,
+    PeftConfig,
+    PromptEncoderConfig,
+    PromptTuningConfig,
+    LoraConfig,
+    TaskType
+)
+import transformers.utils
+import datasets.utils
+from datasets import (
+    load_dataset,
+    concatenate_datasets,
+    DatasetDict
+)
+import evaluate
 
-def load_math_data(data_dir):
-    math_data = []
-    for subdir, _, files in os.walk(data_dir):
-        for file in files:
-            if file.endswith(".json"):
-                file_path = os.path.join(subdir, file)
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-                    math_data.append(data)
-    df = pd.DataFrame(math_data)
-    return df
+parser = argparse.ArgumentParser(description='Training script')
 
-data_dir = "/root/rdgr/data/MATH/train"
-df = load_math_data(data_dir)
+parser.add_argument('-m', '--model_name_or_path', type=str, default="microsoft/deberta-v3-base", help='Path to the model or model name')
+parser.add_argument('-e', '--num_epochs', type=int, default=20, help='Number of epochs for training')
+parser.add_argument('-b', '--batch_size', type=int, default=16, help='Batch size for training and evaluation')
+parser.add_argument('-l', '--log_level', type=int, default=5, help='Log level for transformers and datasets')
+args = parser.parse_args()
 
-class DifficultyDataset(Dataset):
-    def __init__(self, df, tokenizer, max_length):
-        self.df = df[df['level'] != 'Level ?']
-        self.tokenizer = tokenizer
-        self.max_length = max_length
+model_name_or_path = args.model_name_or_path
+num_epochs = args.num_epochs
+batch_size = args.batch_size
+lr = 1e-3
 
-    def __len__(self):
-        return len(self.df)
+shuffle_seed = 17
+configs = ['algebra', 'counting_and_probability', 'geometry', 'intermediate_algebra', 'number_theory', 'prealgebra', 'precalculus']
 
-    def __getitem__(self, idx):
-        problem = self.df.iloc[idx]['problem']
-        # print(self.df.iloc[idx]['level'])
-        label = int(self.df.iloc[idx]['level'][-1]) - 1  # assuming 'level' is the label
-        assert 0 <= label <= 4
-        encoding = self.tokenizer.encode_plus(
-            problem,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_attention_mask=True,
-            return_tensors='pt',
-        )
-        return {
-            'problem_text': problem,
-            'input_ids': encoding['input_ids'].flatten(),
-            'attention_mask': encoding['attention_mask'].flatten(),
-            'labels': torch.tensor(label, dtype=torch.long)
-        }
+def process_level(example):
+    level = example['level']
+    if level == 'Level ?':
+        example['level'] = None
+        return example
+    # Extract the number from the level and subtract 1 to get range 0-4
+    level_number = float(int(level.split()[-1]) - 1)
+    assert(0 <= level_number <= 4)
+    example['level'] = level_number
+    return example
 
-tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-v2-xlarge")
+def load_split_dataset(dataset_name : str, split : str):
+    datasets = []
+    for config in configs:
+        data = load_dataset(dataset_name, config)
+        datasets.append(data[split])
+    ds = concatenate_datasets(datasets)
+    return ds.map(process_level).filter(lambda x:x['level'] != None).shuffle(shuffle_seed)
 
-dataset = DifficultyDataset(df, tokenizer, max_length=256)
-dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+def save_combined_dataset(dataset_name : str, path : str):
+    train_dataset = load_split_dataset(dataset_name, "train")
+    test_dataset = load_split_dataset(dataset_name, "test")
 
-peft_config = LoraConfig(
-    task_type=TaskType.SEQ_CLS, inference_mode=False, r=8, lora_alpha=32, lora_dropout=0.1
+    # Create a DatasetDict
+    dataset_dict = DatasetDict({
+        "train": train_dataset,
+        "test": test_dataset
+    })
+
+    # Save your dataset to disk
+    dataset_dict.save_to_disk(path)
+
+#save_combined_dataset("/root/rdgr/data/MATH/", "/root/rdgr/data/MATH-combined/")
+
+dataset = DatasetDict.load_from_disk("/root/rdgr/data/MATH-combined/")
+#dataset = load_dataset("/root/rdgr/data/MATH", "algebra").map(process_level).filter(lambda x:x['level'] != None)
+#dataset = load_dataset("glue", "mrpc")
+print(dataset["train"][0])
+
+def create_dispatch_datasets(dataset, dispatch_sizes, output_folder):
+    # Create dispatch datasets for train and test
+    for split in ['train', 'test']:
+        for size in dispatch_sizes:
+            dispatch_dataset = dataset[split].select(range(size))
+            dispatch_dataset.to_csv(f"{output_folder}/dispatch-{split}-{size}.csv")
+
+#dispatch_sizes = [5, 100, 1000]
+#output_folder = "/root/rdgr/data/MATH-dispatch/"
+#create_dispatch_datasets(dataset, dispatch_sizes, output_folder)
+
+metric = evaluate.load('mse')
+
+def compute_metrics(eval_pred):
+    predictions, labels = eval_pred
+    #predictions = np.argmax(predictions, axis=1)
+    return metric.compute(references=labels, predictions=predictions)
+
+if any(k in model_name_or_path for k in ("gpt", "opt", "bloom")):
+    padding_side = "left"
+else:
+    padding_side = "right"
+
+tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, padding_side=padding_side)
+if getattr(tokenizer, "pad_token_id") is None:
+    tokenizer.pad_token_id = tokenizer.eos_token_id
+
+def tokenize_function(examples):
+    outputs = tokenizer(examples["problem"], truncation=True, max_length=480)
+    #outputs = tokenizer(examples["sentence1"], examples["sentence2"], truncation=True, max_length=None)
+    return outputs
+
+tokenized_datasets = dataset.map(
+    tokenize_function,
+    batched=True,
+    #remove_columns=["idx", "sentence1", "sentence2"],
+    remove_columns=["problem", "solution", "type"],
 )
 
-model = DebertaV2ForSequenceClassification.from_pretrained("microsoft/deberta-v2-xlarge", num_labels=5)
+tokenized_datasets = tokenized_datasets.rename_column("level", "labels")
+#tokenized_datasets = tokenized_datasets.rename_column("label", "labels")
+print(tokenized_datasets["train"][0])
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding="longest")
+
+peft_config = PromptTuningConfig(task_type="SEQ_CLS",
+                                 num_virtual_tokens=20,
+                                 prompt_tuning_init="TEXT",
+                                 prompt_tuning_init_text="Determine the difficulty (0-4) of the following high school math problem: ",
+                                 tokenizer_name_or_path="microsoft/deberta-base"
+                                 )
+
+#peft_config = LoraConfig(
+#    task_type=TaskType.SEQ_CLS, r=8, lora_alpha=32, lora_dropout=0.1
+#)
+
+model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path, return_dict=True, num_labels=1)
 model = get_peft_model(model, peft_config)
-optimizer = AdamW(model.parameters(), lr=1e-5)
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-model.to(device)
+model.print_trainable_parameters()
 
-def train_epoch(model, dataloader, optimizer, device):
-    model.train()
-    total_loss = 0
-    progress_bar = trange(len(dataloader), desc='Training')
+training_args = TrainingArguments(
+    output_dir=f"joshcho/{model_name_or_path}-peft-ptuning",
+    learning_rate=lr,
+    per_device_train_batch_size=batch_size,
+    per_device_eval_batch_size=batch_size,
+    num_train_epochs=num_epochs,
+    weight_decay=0.01,
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    load_best_model_at_end=True,
+)
 
-    for i, batch in enumerate(dataloader):
-        optimizer.zero_grad()
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
-        labels = batch['labels'].to(device)
+import logging
+log_level = args.log_level
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
 
-        outputs = model(input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs[0]
-        total_loss += loss.item()
+logger.setLevel(log_level)
+datasets.utils.logging.set_verbosity(log_level)
+transformers.utils.logging.set_verbosity(log_level)
 
-        loss.backward()
-        optimizer.step()
-        progress_bar.set_description(f"Training loss: {loss.item()}")
-        progress_bar.update()
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_datasets["train"],
+    eval_dataset=tokenized_datasets["test"],
+    tokenizer=tokenizer,
+    data_collator=data_collator,
+    compute_metrics=compute_metrics,
+)
 
-    avg_train_loss = total_loss / len(dataloader)
-    return avg_train_loss
+def train_model():
+    trainer.train()
+    model.save_pretrained("./saved-peft")
 
-def train_model(model, dataloader, epochs, optimizer, device):
-    for epoch in range(epochs):
-        print(f"\nEpoch {epoch + 1}")
-        avg_train_loss = train_epoch(model, dataloader, optimizer, device)
-        print(f"\nAverage training loss: {avg_train_loss:.2f}")
+train_model()
 
-        checkpoint_dir = f"./saved/checkpoint_epoch_{epoch + 1}"
-        os.makedirs(checkpoint_dir, exist_ok=True)
-        model.save_pretrained(checkpoint_dir)
-        tokenizer.save_pretrained(checkpoint_dir)
-        accuracy = evaluate_and_save(model, dataloader_test, device, df_test)
-        print(f"Test Accuracy: {accuracy}")
-    model.save_pretrained("./saved-model")
+def run_inference(peft_model_path):
+    config = PeftConfig.from_pretrained(peft_model_path)
+    inference_model = AutoModelForSequenceClassification.from_pretrained(config.base_model_name_or_path, return_dict=True, num_labels=1)
+    tokenizer = AutoTokenizer.from_pretrained(config.base_model_name_or_path)
+    model = PeftModel.from_pretrained(inference_model, peft_model_path)
 
-# Load test data
-data_dir_test = "/root/rdgr/data/MATH/test"
-df_test = load_math_data(data_dir_test)
-
-# Create test DataLoader
-dataset_test = DifficultyDataset(df_test, tokenizer, max_length=256)
-dataloader_test = DataLoader(dataset_test, batch_size=8, shuffle=False)
-
-def evaluate_and_save(model, dataloader, device, df):
-    model.eval()
-    total = 0
-    correct = 0
-    predictions = []
+    classes = [0, 1, 2, 3, 4]
+    inputs = tokenizer("Please simplify the following expression: a + 2 + 3", truncation=True, padding="longest", return_tensors="pt")
     with torch.no_grad():
-        for batch in dataloader:
-            input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
-            labels = batch['labels'].to(device)
+        outputs = model(**inputs).logits
+        print(outputs)
 
-            outputs = model(input_ids, attention_mask=attention_mask)
-            _, preds = torch.max(outputs.logits, dim=1)
-            total += labels.size(0)
-            correct += (preds == labels).cpu().numpy().sum()
-
-            # Converting predictions from tensor to list
-            preds = preds.cpu().tolist()
-
-            # Converting label indices to 'Level n' format and appending to the list
-            predictions.extend(['Level ' + str(i+1) for i in preds])
-
-    accuracy = correct / total
-
-    # Append predictions to the DataFrame
-    df['prediction'] = predictions
-
-    # Save DataFrame to a CSV file
-    df.to_csv('./results.csv', index=False)
-
-    return accuracy
-
-# Call the function to train the model
-train_model(model, dataloader, 5, optimizer, device)
-
-# Call the function to evaluate the model and save results
-accuracy = evaluate_and_save(model, dataloader_test, device, df_test)
-print(f"Test Accuracy: {accuracy}")
+    paraphrased_text = torch.softmax(outputs, dim=1).tolist()[0]
+    for i in range(len(classes)):
+        print(f"{classes[i]}: {int(round(paraphrased_text[i] * 100))}%")
+#run_inference()
