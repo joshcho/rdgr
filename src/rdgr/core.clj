@@ -30,12 +30,6 @@
   (format "Given a mathematics problem, determine the answer. %s"
           (how-prompt-fn CoT-instruction nil)))
 
-"You are Difficulty AI, an AI determining the difficulty of the math problem that the user provides. The difficulty is either AMC10, AMC12, or AIME.
-
-Answer in the following format:
-Justification: {justification}
-Difficulty: {difficulty}"
-
 (def base-prompt
   (solve-prompt-format-fn "Do not show your work."))
 
@@ -185,10 +179,6 @@ Revised Step 1: {revised step 1}
   (get-in @problems-conn [model id :problem/evaluations]))
 (defn get-difficulty [model id]
   (get-in @problems-conn [model id :problem/difficulty]))
-(defn get-accuracies [model ids]
-  (map (fn [id]
-         (get-accuracy model id))
-       ids))
 
 (defn get-accuracy [model id]
   {:pre [(s/valid? :model/spec model)
@@ -196,6 +186,10 @@ Revised Step 1: {revised step 1}
   (when-let [evaluations (get-in @problems-conn [model id :problem/evaluations])]
     (/ (count (filter identity evaluations))
        (count evaluations))))
+(defn get-accuracies [model ids]
+  (map (fn [id]
+         (get-accuracy model id))
+       ids))
 
 (defn get-average-accuracy [model ids]
   (assert
@@ -204,16 +198,16 @@ Revised Step 1: {revised step 1}
                 ids)))
   (float
    (/ (apply + (map (fn [id]
-                      (get-problem-accuracy model id))
+                      (get-accuracy model id))
                     ids))
       (count ids))))
 (defn get-accuracy-difference [model1 model2 ids]
   (map vector
        ids
        (map -
-            (map (fn [id] (get-problem-accuracy model1 id))
+            (map (fn [id] (get-accuracy model1 id))
                  ids)
-            (map (fn [id] (get-problem-accuracy model2 id))
+            (map (fn [id] (get-accuracy model2 id))
                  ids))))
 
 (defn parallel-evaluate-problem [model ids]
