@@ -12,7 +12,7 @@
       (throw (Exception. err)))))
 
 (s/def :model/spec
-  #(u/in? ["gpt-4" "gpt-3.5-turbo"] %))
+  #(u/in? ["gpt-4" "gpt-3.5-turbo" "gpt-4-CoT" "gpt-4-PS"] %))
 (s/def ::cost float?)
 (s/def :cost/prompt ::cost)
 (s/def :cost/completion ::cost)
@@ -31,13 +31,17 @@
                     :cost/spec)
           pricing)
 
-(defn get-cost [problem]
-  {:pre [(s/valid? :problem/completed-spec problem)]}
-  (let [{:problem/keys [model question raw-completion]} problem]
+(defn get-cost [model prompt completion]
+  {:pre [(s/valid? :model/spec model)
+         (string? prompt)
+         (string? completion)]}
+  (let [model (if (= model "gpt-4-CoT")
+                "gpt-4"
+                model)]
     (+
      (*
       (/ (get-in pricing [model :cost/prompt]) 1000.0)
-      (get-num-tokens model question))
+      (get-num-tokens model prompt))
      (*
       (/ (get-in pricing [model :cost/completion]) 1000.0)
-      (get-num-tokens model raw-completion)))))
+      (get-num-tokens model completion)))))
